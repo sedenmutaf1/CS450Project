@@ -1,0 +1,540 @@
+VISPESAR: Video Summarization by Prompt
+Engineering and Serverless Architecture
+Kerem Betir, Hazar Yakal, Emir Mut, Ismail Ari
+Department of Computer Science, Ozyegin University, Istanbul, Turkiye
+{kerem.betir,hazar.yakal,emir.mut}@ozu.edu.tr
+ismail.ari@ozyegin.edu.tr
+Abstract—This paper presents VISPESAR, a cloud-based video
+summarization service that extracts short clips from uploaded
+videos based on natural language queries or prompts. The
+current implementation uses Google Gemini API to interpret
+user prompts and identify content that matches user queries.
+FFmpeg software is used for video processing, mainly for
+keyframe extraction, video slicing, and concatenation to generate
+summaries. The backend employs a serverless architecture with
+Amazon Web Services (AWS) Lambda, Simple Storage Service
+(S3), Step Functions, and DynamoDB, while providing real-time
+feedback to the frontend user interfaces through WebSocket
+communication. The overall solution demonstrates how cloud
+computing and Artificial Intelligence (AI) can be used together to
+enable affordable and scalable video intelligence. Through careful
+design and experimentation, we find that quality of a modern
+video summarization service depends on: 1- clarity of the prompts
+used, 2- accuracy of the object detection and classification from
+frames, and 3- efficiency and scalability of the cloud-based system
+implementation.
+Index Terms—Video summarization, LLM, prompt, cloud,
+AWS, serverless architecture, FFmpeg, WebSocket.
+I. INTRODUCTION
+The rapid growth of online video created a demand for
+automated summarization. Viewing hours of footage to extract
+relevant highlights manually is labor intensive and does not
+scale. Traditional methods rely on domain-specific models
+(sports, security, etc.), limiting flexibility and incurring high
+development and maintenance costs. Recent advances in multimodal
+large language models (LLM) offer query-driven summarization
+via natural language, but integrating these models
+into a scalable, cost-effective system presents significant
+engineering challenges. Our goal is to create a pipeline for
+video processing that generates concise video summaries in a
+timely way, makes accurate judgments on what constitutes a
+“highlight” based on user queries, and performs well at scale.
+This work is designed as an end-to-end solution, allowing
+users to go from raw video to personalized summaries in a
+cost-effective way.
+VISPESAR is a cloud-native, serverless video-to-video
+(V2V) summarization [4] system built around multiple Amazon
+AWS [1] cloud services and Google Gemini [2]. It
+samples video at 1 frame per second (fps) and sends batches
+to the Google Gemini API to identify segments matching
+979-8-3315-9727-6/25/$31.00 © 2025 IEEE
+user queries. The video intervals of the detected events (i.e.
+highlights) are fed to the Lambda layer containing FFmpeg
+binary for clip extraction and concatenation. AWS Step Functions
+orchestrate the workflow, S3 stores videos and clips,
+DynamoDB tracks metadata, and WebSockets deliver realtime
+progress updates. VISPESAR is not a simple service
+wrapper, but a complex distributed workflow that optimizes
+prompt accuracy, performance, usability, and cost for its endusers.
+Our evaluation demonstrates that it can provide realtime,
+cost-effective summarization with minimal operational
+overhead. The system optimizes storage and bandwidth and
+allows users to locate moments of interest in arbitrary videos.
+The remainder of this paper is organized as follows. Section
+II reviews the background and utilized technologies. Section
+III details the the system architecture and implementation.
+Section IV presents experimental setup and evaluation results
+based on accuracy, processing performance, and costs. Section
+V discusses related work, and Section VI concludes the paper
+also presenting future directions.
+II. BACKGROUND
+Video summarization refers to the process of extracting the
+most informative and relevant segments from a longer video.
+Traditional approaches rely on visual features, audio cues,
+or metadata analysis. Modern AI-powered summarization, as
+implemented in VISPESAR, leverages deep learning models
+that can understand both visual content and natural language
+descriptions, providing more flexible and personalized
+summaries based on specific user queries. Constructing an
+automated, scalable video summarization system is a multidisciplinary
+task that involves leveraging a variety of software
+tools from cloud computing, AI, and multimedia processing,
+as summarized in Table I. The rest of this section explains
+their roles within the overall system.
+A. FFmpeg
+FFmpeg is an open-source multimedia framework used extensively
+for video manipulation. VISPESAR deploys FFmpeg
+as a Lambda layer, enabling serverless video processing. Key
+FFmpeg operations include:
+• Extract frames from input videos,
+• Split videos into parts via parallel processing,
+• Create short clips from highlight intervals,
+• Concatenate clips to generate the final summary video.
+TABLE I: Overview of cloud and software tools used.
+Component Purpose
+FFmpeg Frame extraction, clip generation
+Gemini 2.5 Flash Frame evaluation via prompt
+Lambda Serverless functions
+S3 Bucket Blob (Binary Large Object) storage
+Step Functions Orchestrating workflow
+DynamoDB NoSQL for storing highlight intervals
+API Gateway Provides HTTP endpoints and WebSockets
+CloudFront CDN distribution for S3-hosted website
+WebSocket Real-time user notification
+Using FFmpeg within serverless Lambda functions, we
+achieve efficient video processing without the need for specialized
+media services, which significantly reduces operational
+costs.
+B. Google Gemini API
+VISPESAR leverages Google Gemini, a multi-modal AI
+model capable of analyzing text, images and video. We use
+Gemini to evaluate video frames against user queries, determining
+if frames contain content of interest.We process frames
+in batches of 5 frames to optimize API usage while providing
+context for accurate content evaluation.
+C. Amazon Web Services (AWS)
+AWS provides the infrastructure backbone for VISPESAR,
+enabling scalable, reliable video processing without the need
+for dedicated hardware. Key AWS services used include:
+AWS Lambda: A serverless compute service, executing functions
+for video processing, frame analysis, clip creation, and
+database operations. Lambda’s ephemeral storage is leveraged
+for temporary file operations during video processing.
+Amazon S3: Object storage service for storing uploaded
+videos, extracted frames, short clips, and final highlight videos.
+S3’s transfer acceleration and direct upload capabilities allow
+efficient handling of large video files.
+AWS Step Functions: Orchestrates the complex video processing
+workflow, managing parallel execution and state transitions.
+The implementation uses Map states for concurrent
+processing of frame analysis and clip creation.
+Amazon DynamoDB: NoSQL database storing highlight
+intervals identified through frame analysis. Tables track user
+connections, video queries, and frame intervals using a composite
+key structure including queryId and frameId.
+API Gateway and CloudFront: Provides HTTP endpoints
+for frontend interaction and WebSocket connections for realtime
+progress updates on video extraction, analysis, and clip
+assembly stages. The system implements a reconnection mechanism
+to maintain session state across page reloads. Amazon
+CloudFront is a content delivery network (CDN) service that
+is used to deliver the output video economically to end-users.
+III. ARCHITECTURAL DESIGN
+Our application implements a serverless video summarization
+system allowing users to submit videos and use prompts
+to generate relevant summaries. Its architecture follows a
+microservices pattern, with distinct components handling different
+stages of the video processing pipeline. This architectural
+choice allows parts to be independently scalable, costeffective,
+responsive and fault-tolerant.
+Fig. 1: UI for generating summaries from input videos.
+A. Application Workflow
+Video Upload and Frame Extraction steps shown in Figure
+2 are done only once for each video.
+Upload Phase: When the user initiates an upload using the
+User Interface (UI) shown in Figure 1, the frontend opens
+a WebSocket to VispesarWebSocketApi and a Lambda stores
+the connectionId and folderId in ConnectionsTable for
+progress updates. Uploading the MP4 to the S3 VispesarBucket
+fires an S3 OBJECT_CREATED event that invokes the CreateFrames
+Lambda, which downloads the video, uses FFmpeg
+to sample frames at 1 fps into {folderId}/frames/, and
+sends a “frames extracted” message back over the WebSocket.
+The remaining steps are repeated for each query over the same
+video.
+Processing Phase: When the user submits a query, the
+ProcessQuery Lambda (Figure 3) logs the query and starts
+the Step Functions workflow. CreateAssetsTask lists frames
+in S3, groups them into batches and records each group. AnalyzeFrames
+Lambdas (concurrency=15) retrieving their frames,
+calling Google Gemini that labels each group as “Highlight”
+or “Normal” and sending progress over the WebSocket.
+MergeIntervalsTask merges overlapping highlights into a single
+video interval and GetIntervalsTask fetches merged segments.
+CreateSingleClip Lambdas (concurrency=20) use the
+FFmpegLayer to cut clips into {folderId}/clips/, and
+CollectClipsTask aggregates their S3 paths. MergeClipsTask
+concatenates clips into a summary MP4, uploads it to S3,
+updates outputVideoUrl in VispesarQueries, and sends
+a “complete” WebSocket message.
+Fig. 2: Video upload and frame extraction process.
+Fig. 3: Frame analysis and summary generation process.
+B. Design Decisions and Trade-offs
+Serverless architecture alleviates server management overheads,
+offers pay-per-use pricing, and auto scales with demand
+by leveraging AWS Lambda, S3, Step Functions, and DynamoDB.
+To reduce Gemini API usage we batch frame analysis
+calls to API. If b is the batch size, we save (1−1/b)×100%
+on API. We also use Step Functions’ Map state to balance
+throughput against token-per-minute quotas (concurrency=15
+for analysis and concurrency=20 for clip creation).
+Payload sizes are tuned to stay within Transaction Per
+Minute (TPM) limits, with a retry strategy to handle transient
+throttling. Handling API rate limits required a robust retry
+approach, e.g. we back off 6 seconds between tries, up to 12
+attempts to ensure reliability under bursty loads. Lambda’s
+ephemeral /tmp storage was chosen (over EFS) for local
+video staging across parallel invocations, delivering lower
+latency at negligible costs.
+IV. EXPERIMENTAL SETUP AND RESULTS
+The following steps detail our experimental setup, followed
+by the accuracy and performance results.
+Upload & Frame Extraction: Users upload MP4 videos
+(tested with sizes up to 2.35 GB and durations over 2 hours)
+through a secure frontend using presigned S3 URLs, which
+automatically trigger frame extraction at 1 fps.
+Query Processing: Users can enter natural language queries
+(e.g. “a basketball player successfully dunking”) which are
+processed by the ProcessQueryFunction and stored in DynamoDB
+for tracking.
+Frame Analysis: Our AnalyzeFramesFunction batches
+frames and sends them to Google Gemini AI model and the
+user’s query together with our instructions.
+Highlight Detection: Testing with various video types confirmed
+that Gemini identifies relevant segments matching user
+queries with high accuracy on some domains and lower
+accuracy on others.
+Clip Creation and Assembly: The CreateSingleClipFunction
+extracts video segments from the original video based on
+identified highlights and MergeClipsFunction concatenates all
+relevant clips into a final summary video.
+Final Delivery: The output summary video is stored in AWS
+S3 Bucket and made available to the user through a presigned
+URL for viewing and downloading.
+A. Validation Method, Prompts and Accuracy
+To validate VISPESAR, we compared its prompt-driven
+highlights against manually annotated ground-truth on two
+primary videos: a basketball game with varied actions (dunks,
+layups, scores, blocks) and a first-person street walk. For each,
+we issued prompts, ran the pipeline via Google Gemini API,
+and measured performance using precision, recall, F1 score.
+We manually annotated timestamps for key events and
+objects, generated multiple prompts targeting specific actions,
+processed the videos in our pipeline, compared the resulting
+highlight intervals against our ground-truth annotations, and
+computed standard evaluation metrics to quantify performance.
+Fig. 4: Multiclass Confusion Matrix of basketball video.
+We’ve prepared a sample basketball match highlight video
+that consists of 6 classes and 60 important events: 10 successful
+dunks, 10 failed dunks, 10 successful 2-3-point shots, 10
+missed 2-3-point shots, 10 successful layups and 10 successful
+blocks. Figure 4 shows the resulting multiclass confusion
+matrix.
+Although there are only 6 event classes, we applied 2 distinct
+prompts for each of “successful dunking” and “successful
+layups” to underline the importance of user-based prompting,
+resulting in 8 prediction categories in Figure 4. Each column
+corresponds to one prompt–class combination: the diagonal
+entry is the true positive (TP) counts and the off-diagonal
+entries are the false positives (FP) and false negatives (FN).
+Precision is computed as (TP/TP +FP), with FP from both
+prompt versions of a class merged so that no clip is doublecounted.
+Recall is defined as (TP/all class instances), and
+each class has exactly 10 ground-truth instances. Regular
+Recall formula (TP/TP + FN) would inflate the FN count
+when clips are labeled multiple times. Table II summarizes the
+accuracy results for each of these 8 prompts using precision,
+recall and F1-score ( 2×precision×recall
+precision+recall ).
+TABLE II: Accuracy results for basketball action search
+prompts as Precision, Recall and F1-score.
+Prompt Precision Recall F1-Score
+1 0.39 0.90 0.54
+2 0.45 1.00 0.62
+3 0.26 0.60 0.36
+4 0.18 0.30 0.23
+5 0.15 0.40 0.22
+6 0.15 0.40 0.22
+7 0.31 0.50 0.38
+8 0.23 0.70 0.35
+1) “A basketball player successfully dunking.” This simple
+prompt detected most basketball dunks (Recall=0.9), but
+had many false positives (Precision=0.39), especially
+with “successful block” events that also look similar
+to dunks as they happen around the rim. Next, we
+engineered the prompt as follows.
+2) “A basketball player successfully dunking. I don’t want
+to see any layups, blocks, shoots or failed dunks. I only
+want to see the successful dunks made.”. This detailed
+prompt captured all dunks (Recall=1.0) while also reducing
+non-dunk segments (Precision=0.45), although some
+FP still remained.
+3) “A basketball player successfully completing a layup.”
+This simple prompt retrieved some layups correctly (Recall=
+0.6), but generated numerous incorrect detections
+(Precision=0.26).
+4) “I only want to see successful layups made by basketball
+players. Where the ball is inside the net and before
+that frame the player is in the beginning of the layup.”
+This advanced prompting surprisingly degraded layup
+detection, lowering both recall and precision. So, we
+learn that the quality (or matching) of the prompt with
+respect to the given multi-model LLM makes a big
+impact on performance.
+5) “A basketball player successfully shooting a 2 or 3
+points.” Shot detection wasn’t reliable, since it confused
+successful shots mainly with successful dunking.
+6) “A basketball player successfully blocks another
+player’s scoring attempt.” Block detection also suffered
+from poor accuracy mainly confused as successful
+dunking. These classification biases towards dunks, also
+evoke ideas that a certain context may be forming within
+multi-modal LLMs when previous prompts have been
+deemed successful.
+7) “A basketball player fails dunking.” Failed dunk identification
+was moderate, but still prone to FP and FN.
+8) “A basketball player misses a 2 or 3 point shot.” High
+coverage of missed shots, but with many FP.
+Overall, the basketball video footage posed several challenges
+such as extremely fast motion, occlusions, and blurs
+leading to inconsistent precision despite reasonable recall.
+Next, we evaluated a slower speed street-walk video over 3
+prompts searching for motorcycles, yellow taxis and certain
+shops with labels, which yielded higher accuracies as shown
+in Table III.
+1) “Filter video for motorcycle presence.” The model reliably
+highlights motorcycle segments, enabling automated
+traffic monitoring or vehicle analytics, with only
+occasional missed intervals.
+2) “Filter video for yellow taxi presence.” All standard
+taxis are captured, but similar vehicles (mainly yellow
+cars and minibuses) generate FP. This prompt-class pair
+could be suitable for transit usage analysis, yet it would
+benefit from refined prompts.
+3) “I want to see if there is a “Pas¸abahc¸e Shop” in the
+video.” Accurately extracts store labels, streamlining
+brand exposure audits and product placement analysis
+without manual video review.
+TABLE III: Accuracy results for Street Video.
+Events TP FP FN TN Precision Recall F1 Score
+Motorcycle 10 2 0 0 0.83 1.00 0.91
+Yellow Taxi 9 0 6 0 1.00 0.60 0.75
+Pas¸abahc¸e Store 3 0 0 0 1.00 1.00 1.00
+B. Local YOLO vs. Cloud LLM Version Performance
+Our original pipeline used YOLOv8 on an ECS Docker
+container, where videos were fetched from S3, split with
+FFmpeg, processed segment-by-segment for object detection,
+merged into intervals, and concatenated clips uploaded back to
+S3. This setup processed a 5 minute video in 40 minutes and
+only detected simple, clearly visible objects; complex events
+like a ball entering a hoop required custom, domain specific
+logic.
+VISPESAR replaced YOLO with a multi-modal LLM in
+AWS Lambda functions, orchestrated by Step Functions to
+analyze frames and generate clips in parallel. The same 5 min
+video completed in about 1 minute, and different semantic
+events (e.g. ball-in-hoop) could be detected without additional
+code. As shown in Table IV, VISPESAR achieves higher
+TP and fewer FP and FN, delivering both speed and broad
+applicability.
+TABLE IV: Comparison of VISPESAR using Google Gemini
+vs. YOLOv8n model.
+Model TP FP FN TN Precision Recall
+Motorcycle with Gemini 10 2 0 0 0.83 1.00
+Motorcycle with YOLOv8 6 6 9 0 0.5 0.4
+C. Processing Time Measurements
+We validated the system on three scenarios: a street video
+prompted for motorcycles (high precision and recall); a basketball
+clip for successful dunking (9 of 10 dunks detected
+alongside some FP); and a 2h 14min movie filtering for a character’s
+appearances (capturing 18m 7s of correct appearances
+and 1m 6s of incorrect or extra clip time). The screenshots for
+these videos are shown in Figure 5.
+We measured each pipeline stage end-to-end and shared
+results in Table V: uploads occured at 5.6 MB/s (3 min.
+per GB); frame extraction with FFmpeg took 40 sec. for
+an 8 min video and 4 min. for a 2h 14min video; creating
+assets was constant around 4s; batch analysis via Gemini
+of 5-frame groups averaged 2.5s per request with 15 concurrent
+Lambdas (processing 1 min of video in about 2s);
+interval merging required 4–8s depending on the number of
+segments; interval retrieval took 3s; clip creation with parallel
+Lambdas took 20s for a 250 MB video; path collection
+completed under 1 s; final merge of clips required 5s; and
+cleanup took 5–11 s, increasing logarithmically with the
+number of items. Finally, the overall summarization overhead
+defined as (SummarizationT ime/InputV ideoDuration)
+decreased as the videos got longer (e.g. 7% for 2h 14min.
+and 2.35 GB video).
+TABLE V: Processing times for three different videos and
+three prompted summarization tasks.
+Time (Seconds) Street Video
+(250 MB)
+Basketball
+Video (1 GB)
+Full Movie
+(2.35 GB)
+Input Video 300 466 2h 14m
+Output Video 93 131 19m 13s
+Upload 45 180 440
+Frame Extraction 30 40 240
+(Upload + Framing) 75 220 680
+Create Assets 4.6 5.3 4
+Batch Analysis 23 16 313
+Interval Merge 4 4.5 7.8
+Getting Intervals 3 2.7 3.2
+Clip Creation 20.5 24 141
+Collecting Clips 0.3 0.4 0.4
+Final Merge 4.2 5.4 16
+Cleanup 4.7 5 11.4
+Summarization Time 64 63 531
+Summariz. Overhead 21% 14% 7%
+D. Financial Feasibility
+Compared to traditional always-on servers, this serverless
+pay-per-use model eliminates fixed infrastructure fees and
+automatically scales with demand, so each summarization
+(a) Street Video showing Yellow taxis.
+(b) Basketball Video showing dunking moments.
+(c) Movie having selected characters.
+Fig. 5: Sample frames from our test videos.
+prompt adds only marginal cost. We observed that summarizing
+a 10-minute video and retaining it for a month on
+the backend costs only about $0.22: AWS Lambda ($0.01),
+S3 storage and requests ($0.02), Step Functions ($0.01), API
+Gateway and DynamoDB (negligible), Google Gemini ($0.03),
+and ECR ($0.15).
+Frontend expenses for 100 users are also minimal: 1500
+HTTPS requests cost roughly $0.002, storing 1 MB summaries
+in S3 costs $0.01, and 0.1 GB of CloudFront transfer costs
+$0.009. Thus, baseline hosting without any video processing is
+approximately $0.18 per month, and each additional 10-minute
+summarization adds about $0.05 (covering Gemini, Lambda,
+and Step Functions), with S3 and DynamoDB I/O remaining
+negligible. Table VI shows estimated costs for a single 1GB
+video and our real costs over multiple videos for a month.
+Since we processed multiple videos over the month averaging
+9GB on S3, our real costs were higher, but these costs
+were approximately linearly correlated (S3=$0.02/GB x 9GB
+∼ $0.20). The step function cost is higher because multiple
+TABLE VI: Real Costs vs. Estimated Costs
+Service Real Costs (For
+Multiple Videos)
+Estimated Costs
+(For Single Video)
+AWS Lambda $0.00 $0.01
+AWS S3 $0.20 $0.02
+AWS Step Func. $0.07 $0.01
+AWS API Gateway $0.00 $0.00
+AWS DynamoDB $0.00 $0.00
+Google Gemini – (*) $0.03
+AWS ECR $0.19 $0.15
+Total Cost $0.46 $0.22
+videos had more state transitions. We did not include Gemini
+price because we tested it out separately, yet Google Cloud
+only billed us $0.03. So, our Gemini estimates were also on
+point. AWS Lambda cost less than $0.01, so it showed as
+$0.00 on the dashboard.
+V. RELATED WORK
+NVIDIA’s Visual Insight Agent (VIA) or Visual Search and
+Summarization (VSS) framework [3], presents a sophisticated
+approach to automating video analytics through AI driven
+video processing. The system employs a combination of vision
+language models (VLM) and large language models (LLM)
+to analyze video content, enabling the extraction of meaningful
+insights from sports footage and alike. This approach
+facilitates the identification of key events and patterns within
+the video data, thereby enhancing the efficiency and accuracy
+of sports analytics. They also promote the use of powerful
+NVIDIA GPUs and software for VLM-LLM acceleration.
+A serverless solution by Jahangiri [5] demonstrates video
+highlight generation with AWS capabilities and Claude3 LLM
+on Amazon Bedrock. While both of our solutions address the
+same problem, our approach differs in several key aspects: we
+use FFmpeg in Lambda layers instead of AWS MediaConvert
+for cost efficiency and better control; we leverage Google
+Gemini 2.5 Flash for currently favorable API prices, implement
+WebSocket-based progress updates for interactive user
+experience, and employ parallel processing with controlled
+concurrency limits for optimized throughput. These choices
+reflect our focus on balancing performance, cost-effectiveness,
+and user experience while maintaining flexibility across diverse
+use cases.
+Hua et al. [4] provide V2Xum-LLM, a cross-modal video
+summarization dataset featuring 30,000 diverse videos with
+lengths ranging from 40 to 940 seconds. In this work, we
+used our own labeled video datasets, but plan to use their
+Instruct-V2Xum for comparison in the future.
+Lee et al. [6] also propose LLM-based Video Summarization
+(LLMVS), which translates video frames into a sequence of
+captions using a Muti-modal LLM and assesses the importance
+of each frame based on the video captions. They use a global
+attention mechanism to capture the overarching narrative.
+This approach uses a macro-level contextual summarization,
+whereas we focus on finding prompted events by end users.
+Finally, cost-effective cloud maintenance after service deployment
+is also critical. FineCloud [7] developed a finegrained
+cloud advisory tool using machine learning (ML), to
+track multi-tiered cloud service utilization and provide savings
+by shutting down or throttling under-utilized services.
+VI. CONCLUSION AND FUTURE WORK
+We successfully designed and implemented VISPESAR, a
+serverless video summarization application on AWS that leverages
+Google Gemini’s multimodal capabilities. Our pipeline
+extracts and batches frames, identifies highlights through
+structured prompting, and produces concise summaries using
+FFmpeg powered Lambda functions. It is orchestrated by Step
+Functions with parallel processing and real-time WebSocket
+progress updates. VISPESAR processes 7-8 minute videos
+in ∼1 minute, 40× faster than our previous YOLOv8-based
+solution. With per-video processing costs under $0.06 for
+a 10 minute video, VISPESAR democratizes video analysis
+capabilities. We tested and promoted several uses cases from
+different application domains. For example, sports enthusiasts
+can extract favorite player moments, marketing teams
+can identify brand appearances in videos without expensive
+hardware, professors or lifelong learning centers can curate
+summarized videos for their students or content creators can
+generate highlight reels.
+Our future work will focus on several key areas. We plan to
+implement API key rotation to prevent token quota exhaustion
+during concurrent processing, enabling support for multiple
+simultaneous users without triggering rate limits. Adaptive
+frame sampling rates can be used to enhance detection accuracy;
+they can be varied based on motion intensity or event
+probabilities (e.g. object detection confidence values). Larger
+frame groups can be evaluated for improved context. These
+changes could improve accuracy in fast action videos, while
+balancing cost and performance.
+REFERENCES
+[1] Amazon Web Services (AWS)–Cloud Computing Services.
+https://aws.amazon.com, 2025. Accessed: 2025-07-30.
+[2] Google AI for Developers. https://ai.google.dev, 2025. Accessed: 2025-
+07-30.
+[3] NVIDIA, Visual Insight Agent (VIA)– Sports Analytics with GenAI.
+https://www.nvidia.com/en-us/on-demand/session/other2024-via2/, 2025.
+Accessed: 2025-07-30.
+[4] Hang Hua, Yunlong Tang, Chenliang Xu, and Jiebo Luo. V2xumllm:
+Cross-modal video summarization with temporal prompt instruction
+tuning. In Proceedings of the AAAI Conference on Artificial Intelligence,
+volume 39, pages 3599–3607, 2025.
+[5] Pedram Jahangiri. Accelerating sport highlights generation with
+GenAI. https://medium.com/@pedram.jahangiri62/accelerating-sporthighlights-
+generation-with-genai-ffdfd5c51685, 2024. Accessed: 2025-
+07-30.
+[6] Min Jung Lee, Dayoung Gong, and Minsu Cho. Video summarization
+with large language models. In Proceedings of the Computer Vision and
+Pattern Recognition Conference, pages 18981–18991, 2025.
+[7] Yasemin Orhun, Yigit Istanbullu, and Ismail Ari. Finecloud: Finegrained
+cloud service advisory using machine learning. In 2022 IEEE
+International Conference on Big Data (Big Data), pages 2722–2727,
+2022.

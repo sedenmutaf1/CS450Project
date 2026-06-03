@@ -1,0 +1,427 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{tikz}
+\usepackage{amssymb}
+\usepackage{caption}
+\usetikzlibrary{positioning}
+
+\title{Cost-Aware Hybrid Cloud Architecture for Adaptive Video Analytics}
+
+\author{
+\IEEEauthorblockN{Orkun Acar, Seden Mutaf}
+\IEEEauthorblockA{
+Department of Computer Science\\
+Ozyegin University, Istanbul, Turkey\\
+Email: orkun.acar@ozu.edu.tr, seden.mutaf@ozu.edu.tr
+}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+The rapid growth of video data from surveillance and smart environments demands scalable, efficient, and cost-aware analytics systems. Existing approaches typically rely on either serverless or container-based execution models, resulting in suboptimal performance under varying workloads. In this work, we propose a hybrid cloud video analytics architecture that integrates both execution paradigms through a predictive cost-aware scheduler. The scheduler dynamically selects the optimal backend based on workload characteristics such as video duration, motion complexity, and system load. We formalize the scheduling problem, design a feature-driven decision mechanism, and outline an evaluation methodology to quantify cost and latency improvements over static baselines. Our approach aims to bridge the gap between flexibility and efficiency in modern cloud-based video analytics systems.
+\end{abstract}
+
+\section{Introduction}
+Video data has become one of the fastest-growing data modalities due to widespread deployment of surveillance systems, autonomous platforms, and smart city infrastructure. Processing this data efficiently poses significant challenges due to its size, computational requirements, and variability.
+
+Traditional video analytics systems rely on static pipelines deployed on fixed infrastructure. While these systems can be optimized for specific workloads, they fail to adapt dynamically to changing input characteristics, leading to inefficient resource utilization and increased operational costs.
+
+Recent advances in cloud computing and artificial intelligence have enabled new approaches to video analytics. Serverless computing offers scalability and cost efficiency through fine-grained billing, while container-based systems provide performance and flexibility. However, most existing systems adopt a single execution paradigm and lack mechanisms for dynamic optimization.
+
+\textbf{Research Question:} How can a cloud video analytics system dynamically select execution backends to minimize cost while satisfying latency constraints under heterogeneous workloads?
+
+\textbf{Contribution:}
+\begin{itemize}
+    \item \textbf{Hybrid Cloud Architecture:} We propose a video analytics system that integrates both serverless and container-based execution paradigms, enabling dynamic adaptation to workload characteristics and improving resource efficiency.
+    \item \textbf{Predictive Cost-Aware Scheduler:} We design a scheduler that uses workload features and system state to estimate execution cost and latency, selecting the backend that optimizes the trade-off between speed and cost.
+    \item \textbf{Workload Modeling:} We define a set of video and system features—including video duration, motion intensity, frame complexity, and system load—that allow accurate prediction of backend performance.
+    \item \textbf{Evaluation Methodology for Cost-Latency Trade-Offs:} We outline a systematic evaluation framework to compare static and hybrid execution strategies under diverse workloads, quantifying improvements in both monetary cost and processing latency.
+\end{itemize}
+
+\section{Background and Related Work}
+
+\subsection{Serverless Architectures}
+Serverless platforms such as AWS Lambda provide automatic scaling and eliminate infrastructure management. They are particularly effective for short-lived, parallelizable tasks such as frame-level video processing. However, limitations such as cold start latency, execution time constraints, and lack of GPU support reduce their effectiveness for large-scale workloads.
+
+\subsection{Container-Based Systems}
+Containerized environments (e.g., Docker on ECS or Kubernetes) provide greater control over hardware resources and enable long-running, compute-intensive tasks. These systems are suitable for deep learning workloads but introduce operational overhead and potential resource underutilization.
+
+\subsection{Video Analytics Systems}
+Recent systems such as VISPESAR demonstrate serverless video summarization using multimodal models. While effective, such systems rely on a single execution model and do not adapt execution strategies dynamically. Traditional approaches using models like YOLO are efficient but limited in semantic flexibility.
+
+\subsection{Research Gap}
+Existing literature lacks systems that:
+\begin{itemize}
+\item dynamically select execution backends
+\item optimize cost and latency jointly
+\item adapt to workload variability
+\end{itemize}
+
+\section{Problem Definition}
+We define the problem as selecting an execution backend for each video processing task such that overall cost is minimized while meeting latency constraints.
+
+Given a workload $x$ characterized by video properties and system state, the system must choose between serverless ($S$) and container-based ($C$) execution.
+
+\section{Proposed System}
+
+\subsection{System Overview}
+The proposed system consists of the following stages:
+\begin{enumerate}
+\item Video ingestion and storage
+\item Frame extraction using FFmpeg
+\item Feature extraction for workload characterization
+\item Backend selection via scheduler
+\item Execution and result aggregation
+\end{enumerate}
+
+\subsection{Scheduling Formulation}
+The core challenge of the system is to select the execution backend for each video processing task in a way that minimizes cost while satisfying latency constraints. Let $x$ represent a video workload characterized by features such as duration, motion intensity, scene complexity, and current system load. Let $b \in \{S, C\}$ denote the backend choice, where $S$ is serverless execution and $C$ is container-based execution.
+
+We formulate the scheduling problem as selecting the backend that minimizes a weighted combination of cost and latency:
+
+\begin{equation}
+b^* = \arg\min_{b \in \{S,C\}} C_b(x) + \lambda L_b(x),
+\end{equation}
+
+where $C_b(x)$ is the estimated cost of executing task $x$ on backend $b$, $L_b(x)$ is the estimated latency, and $\lambda$ is a weighting factor that balances the trade-off between cost and latency. A higher $\lambda$ prioritizes faster execution, possibly at higher cost, whereas a lower $\lambda$ favors minimizing monetary cost, even if execution is slower. This allows the system to adapt to application-specific requirements, such as real-time responsiveness versus budget constraints.
+
+Since exact cost and latency are not known prior to execution, we approximate these values using predictive models trained on historical workload data. Each model takes the workload features as input and produces estimated cost $\hat{C}_b(x)$ and latency $\hat{L}_b(x)$ for each backend. The scheduler then selects the backend that minimizes the weighted sum of these predicted values. For instance, short-duration videos with low motion are typically routed to serverless execution due to low startup cost, whereas longer or high-motion videos are directed to container-based execution to meet latency requirements.
+
+\subsection{Feature Engineering}
+To enable accurate backend selection, we characterize both video workloads and system state using measurable features. These features provide the predictive scheduler with information to estimate execution cost and latency for serverless and container-based backends.
+
+\textbf{1. Video Duration:}  
+The total length of the video in seconds. Longer videos generally require more computation and may exceed serverless execution limits. This can be obtained directly from video metadata using FFmpeg or OpenCV.
+
+\textbf{2. Motion Intensity ($M$):}  
+Motion intensity quantifies changes between consecutive frames, capturing how dynamic the video content is. Let $I_t$ be the grayscale image at frame $t$, then the average motion intensity over the video is:
+
+\[
+M = \frac{1}{F-1} \sum_{t=1}^{F-1} \sum_{i,j} | I_t(i,j) - I_{t-1}(i,j) |
+\]
+
+where $(i,j)$ are pixel coordinates and $F$ is the total number of frames. Higher $M$ indicates more dynamic content, which generally increases computational load and processing latency.
+
+\textbf{3. Frame Complexity / Visual Entropy:}  
+Measures how detailed or “busy” a frame is. Videos with high complexity may require more processing for AI models. This can be computed using grayscale histogram entropy, averaged across frames.
+
+\textbf{4. Scene Change Frequency:}  
+Captures how often the video transitions between distinct scenes. Frequent scene changes may increase processing overhead. Scene changes can be detected by comparing histograms between consecutive frames.
+
+\textbf{5. System Load ($L$):}  
+Represents current computational resource utilization, including CPU, memory, GPU usage, and the number of pending jobs. A simple composite metric can be defined as:
+
+\[
+L = \frac{\text{CPU}_\% + \text{MEM}_\% + \text{GPU}_\%}{3} + \alpha Q
+\]
+
+where $\alpha$ scales the impact of queued jobs $Q$. This feature allows the scheduler to consider real-time system conditions when predicting latency.
+
+\textbf{Feature Vector:}  
+These features are extracted and normalized to form the input vector for the predictive scheduler:
+
+\[
+\mathbf{x} = [\text{Duration}, M, \text{Entropy}, \text{Scene Changes}, L]
+\]
+
+The scheduler then uses this vector to estimate expected cost $\hat{C}_b(\mathbf{x})$ and latency $\hat{L}_b(\mathbf{x})$ for each backend $b$, enabling adaptive, cost-aware decisions.
+\subsection{Video Processing Pipeline}
+
+The video processing pipeline begins after the user uploads a video, which first passes through the scheduler. The scheduler evaluates the video’s characteristics and current system state to select the optimal execution backend—serverless Lambdas or containerized services—before any frame-level processing occurs. Advanced LLM/VLM analysis is optional, triggered only if higher-level semantic understanding is needed.
+
+\textbf{1. Scheduler-Based Backend Selection}
+
+After the user uploads a video to S3 storage, the scheduler Lambda retrieves video metadata and system load metrics. Features such as video duration, motion intensity, frame complexity, scene change frequency, and queued jobs are considered. The scheduler then chooses the most suitable execution backend to balance cost and latency. This decision occurs once per video, even if multiple queries are later executed. The selection is logged in a database table (e.g., DynamoDB) for traceability.
+
+\textbf{2. Serverless Execution Path (Lambda-Based)}
+
+\textbf{2.1 Frame Extraction:}  
+Once the backend is selected, the CreateFrames Lambda is triggered via an S3 OBJECT\_CREATED event. This Lambda downloads the video from S3 and uses FFmpeg to sample frames (e.g., 1 fps) into {folderId}/frames/ on S3. A message is sent back to the user over the WebSocket to indicate that frame extraction is complete. This step occurs once per uploaded video.
+
+\textbf{2.2 Classical CV Analysis (YOLO-based):}  
+Frame batches stored in S3 are processed using parallel AnalyzeFrames Lambdas. Each Lambda retrieves its assigned frame batch, performs object detection with YOLO, and records intervals of detected objects. Progress updates are streamed back to the user through the WebSocket. This path provides efficient detection for standard tasks like moving objects, vehicles, or players.
+
+\textbf{2.3 Optional LLM/VLM-Based Analysis:}  
+If the classical CV analysis does not satisfy the semantic query requirements, frame batches are optionally sent to an LLM/VLM-based analysis (e.g., Google Gemini). These Lambdas classify frames as “highlight” or “normal” based on the query. Highlighted frames are merged into continuous intervals using a MergeIntervalsTask implemented with Step Functions, reducing fragmentation. Progress is sent back to the user over the WebSocket.
+
+\textbf{2.4 Clip Extraction:}  
+Merged intervals are fed to CreateSingleClip Lambdas which invoke FFmpeg to cut clips into {folderId}/clips/ in S3. The concurrency of these Lambdas (e.g., 20 simultaneous executions) ensures high throughput. A CollectClipsTask aggregates the paths of all generated clips for summary assembly.
+
+\textbf{2.5 Summary Assembly:}  
+All clips corresponding to highlights are concatenated using MergeClipsTask in Step Functions into a single query-specific summary video. The final summary is uploaded to S3, the outputVideoUrl is updated in the database, and a “complete” message is sent to the user via the WebSocket.
+
+\textbf{3. Container-Based Execution Path (Docker-Based)}
+
+\textbf{3.1 Job Dispatch:}  
+If the scheduler selects the container backend, a job containing video metadata and processing parameters is sent to a container orchestration system (e.g., Kubernetes or ECS) via a queue or API. A worker container retrieves and starts processing the job.
+
+\textbf{3.2 Video Retrieval:}  
+The container downloads the video from S3 to local storage, reducing repeated I/O operations and improving data access efficiency.
+
+\textbf{3.3 Frame Extraction:}  
+Frames are extracted locally within the container using FFmpeg, avoiding cold starts and eliminating intermediate S3 writes between steps.
+
+\textbf{3.4 Batch CV Processing (YOLO-based):}  
+Instead of processing frames individually, the container processes frames in batches using YOLO, optionally leveraging GPU acceleration. This significantly improves performance for long or high-motion videos.
+
+\textbf{3.5 Optional LLM/VLM-Based Analysis:}  
+If semantic analysis is required, frames are processed either locally or via external APIs (e.g., Gemini). Batch processing can be applied to reduce API overhead and cost.
+
+\textbf{3.6 Interval Merging and Clip Extraction:}  
+Detected highlights are merged into continuous intervals within the container. Clips are then generated directly using FFmpeg without requiring distributed coordination.
+
+\textbf{3.7 Summary Assembly and Upload:}  
+All clips are merged into a final summary video within the container. The result is uploaded to S3, metadata is stored in the database, and the user is notified via WebSocket.
+
+\textbf{Key Advantages:}
+\begin{itemize}
+\item \textbf{Scheduler-Driven Adaptivity:} Lambda-based scheduler evaluates the video before any processing, ensuring cost-efficient execution.
+\item \textbf{Optional Semantic Analysis:} LLM/VLM Lambdas are invoked only if needed, reducing unnecessary computation.
+\item \textbf{Parallelized Efficiency:} AnalyzeFrames and CreateSingleClip Lambdas process frame batches concurrently, improving throughput.
+\item \textbf{Cost-Latency Optimization:} Backend selection balances monetary cost and latency.
+\item \textbf{Traceability:} Clip metadata, timestamps, and scheduler decisions are stored for auditing or reprocessing.
+\item \textbf{Scalable Architecture:} Each Lambda and S3 stage can scale independently to handle varying workloads.
+\end{itemize}
+
+Both execution paths produce the same final output, ensuring that backend selection remains transparent to the user while affecting only performance and cost.
+
+\subsection{Adaptive Semantic Analysis Trigger Mechanism}
+
+A key design challenge in hybrid video analytics systems is determining when classical computer vision methods are insufficient and higher-level semantic analysis is required. To address this, we introduce an adaptive trigger mechanism that dynamically decides whether to invoke LLM/VLM-based analysis (e.g., Gemini) based on query characteristics and intermediate results.
+
+\textbf{1. Query Complexity Analysis:}  
+User queries are first analyzed to determine whether they require simple object detection or higher-level semantic reasoning. Queries containing temporal or behavioral keywords (e.g., “waiting”, “staying”, “longer than”, “before/after”, “activity”) are classified as semantic queries and directly routed to LLM/VLM analysis.
+
+\textbf{2. Temporal Reasoning Requirement:}  
+Certain queries require understanding relationships across multiple frames rather than independent frame-level detection. Since classical object detection models such as YOLO operate on a per-frame basis, they cannot inherently capture temporal dependencies. Queries involving duration, sequence, or interactions between objects trigger semantic analysis.
+
+\textbf{3. Confidence-Based Fallback:}  
+For queries initially handled by classical CV, we evaluate the confidence and consistency of YOLO detections. If the average detection confidence falls below a predefined threshold or results are inconsistent across frames, the system escalates the task to LLM/VLM analysis.
+
+\textbf{Decision Function:}  
+The trigger mechanism can be formalized as:
+
+\begin{equation}
+T(q, y) =
+\begin{cases}
+1, & \text{if } q \in Q_{semantic} \\
+1, & \text{if } q \in Q_{temporal} \\
+1, & \text{if } \text{Conf}(y) < \tau \\
+0, & \text{otherwise}
+\end{cases}
+\end{equation}
+
+where $q$ is the user query, $y$ represents YOLO detection outputs, $\text{Conf}(y)$ is the average detection confidence, and $\tau$ is a predefined threshold. $T(q, y)=1$ indicates that LLM/VLM-based analysis should be invoked.
+
+\textbf{Advantages:}
+\begin{itemize}
+\item Reduces unnecessary LLM/VLM calls, lowering operational cost
+\item Maintains high performance for simple detection tasks
+\item Enables semantic understanding only when required
+\item Provides a scalable and adaptive decision mechanism
+\end{itemize}
+\section{System Architecture}
+
+% Figure 1: Ingestion and Scheduling
+\begin{center}
+\begin{tikzpicture}[scale=0.62, transform shape,
+node distance=0.9cm,
+every node/.style={draw, rectangle, rounded corners, align=center, minimum width=1.75cm, minimum height=0.75cm},
+arrow/.style={->, thick}
+]
+
+\node (user) {User};
+\node (upload) [right=of user] {S3 Upload};
+\node (ffmpeg) [right=of upload] {FFmpeg};
+\node (features) [right=of ffmpeg] {Feature\\Extractor};
+\node (scheduler) [right=of features] {Scheduler};
+
+\draw[arrow] (user) -- (upload);
+\draw[arrow] (upload) -- (ffmpeg);
+\draw[arrow] (ffmpeg) -- (features);
+\draw[arrow] (features) -- (scheduler);
+
+\end{tikzpicture}
+
+\captionof{figure}{Overview of the video ingestion pipeline and feature-driven scheduling mechanism for backend selection.}
+\end{center}
+
+% Figure 2: Backend Execution and Processing (Normal Flow)
+\begin{center}
+\begin{tikzpicture}[scale=0.50, transform shape,
+node distance=1.0cm,
+every node/.style={draw, rectangle, rounded corners, align=center, minimum width=2.2cm, minimum height=0.75cm},
+arrow/.style={->, thick}
+]
+
+\node (scheduler) {Scheduler};
+\node (lambda) [right=of scheduler] {Lambda\\(Serverless)};
+\node (docker) [below=0.45cm of lambda] {Docker\\(Container)};
+
+\node (yolo) [right=of lambda] {YOLO / Classical\\CV Analysis};
+\node (vlm) [right=of docker] {Optional LLM/VLM\\Analysis};
+
+\node (merge) [below right=1.0cm and 1.0cm of yolo] {Clip Merging /\\Interval Extraction};
+\node (summary) [right=of merge] {Summary Video\\Output};
+
+\draw[arrow] (scheduler) -- (lambda);
+\draw[arrow] (scheduler) -- (docker);
+\draw[arrow] (lambda) -- (yolo);
+\draw[arrow] (docker) -- (vlm);
+\draw[arrow] (yolo) -- (merge);
+\draw[arrow] (vlm) -- (merge);
+\draw[arrow] (merge) -- (summary);
+
+\end{tikzpicture}
+
+\captionof{figure}{Backend execution flow illustrating adaptive routing between serverless and container-based processing pipelines.}
+\end{center}
+
+
+\section{Evaluation Plan}
+
+\subsection{Metrics}
+
+We evaluate system performance using the following metrics:
+
+\begin{itemize}
+
+\item \textbf{Cost per Job ($C$):}  
+Average cost per query, including compute, storage, and API usage.
+
+\item \textbf{End-to-End Latency ($L$):}  
+Time from upload to final output.
+
+\item \textbf{Throughput ($T$):}  
+Number of queries processed per unit time under concurrent workloads.
+
+\item \textbf{Scheduler Decision Accuracy:}  
+Correctness of backend selection compared to an oracle baseline.
+
+\item \textbf{Trigger Decision Accuracy:}  
+Correctness of deciding when to invoke LLM/VLM analysis.
+
+\item \textbf{Semantic Detection Accuracy:}  
+Precision, recall, and F1-score for event detection tasks.
+
+\item \textbf{Cost-Latency Trade-off:}  
+Measured using the weighted objective:
+\[
+C + \lambda L
+\]
+
+\end{itemize}
+
+\subsection{Experimental Setup}
+
+We evaluate both system performance and decision-making:
+
+\begin{itemize}
+
+\item \textbf{Execution Strategies:}  
+Compare:
+\begin{itemize}
+\item Serverless-only
+\item Container-only
+\item Hybrid (proposed)
+\end{itemize}
+
+\item \textbf{Workload Variation:}  
+Test across:
+\begin{itemize}
+\item Short vs long videos
+\item Low vs high motion
+\item Low vs high complexity
+\end{itemize}
+
+\item \textbf{Query Types:}  
+Evaluate:
+\begin{itemize}
+\item Object queries (YOLO)
+\item Temporal queries
+\item Semantic queries
+\end{itemize}
+
+\item \textbf{Trigger Evaluation:}  
+Measure correct activation and avoidance of LLM/VLM.
+
+\item \textbf{$\lambda$ Sensitivity:}  
+Analyze cost vs latency prioritization.
+
+\item \textbf{Ablation Study:}  
+Compare:
+\begin{itemize}
+\item YOLO-only
+\item LLM/VLM-only
+\item Hybrid without trigger
+\item Full system
+\end{itemize}
+
+\end{itemize}
+
+\subsection{Datasets}
+
+\begin{itemize}
+
+\item \textbf{Traffic Videos:}  
+Used for object and temporal analysis.
+
+\item \textbf{Benchmarks:}  
+UCF101 and ActivityNet for action and event detection.
+
+\item \textbf{Custom Dataset:}  
+Annotated queries (e.g., “waiting”, “entering”) for semantic and trigger evaluation.
+
+\end{itemize}
+
+\section{Execution Strategy Comparison}
+
+\begin{table}[h]
+\centering
+\caption{Comparison of Execution Backends with Video Processing Considerations}
+\begin{tabular}{|c|c|c|}
+\hline
+Metric & Serverless & Container \\
+\hline
+Startup Time & High & Low \\
+Cost Efficiency (short jobs) & High & Medium \\
+Long Task Support & Low & High \\
+Scalability & High & Medium \\
+Hardware Control & Low & High \\
+Flexibility (semantic queries) & Medium & High \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Expected Contributions}
+\begin{itemize}
+\item Adaptive execution selection framework
+\item Predictive scheduler based on video and system features
+\item Integration of classical CV and truncated VISPESAR-style LLM/VLM processing
+\item Empirical evaluation of hybrid cloud strategies
+\end{itemize}
+
+\section{Conclusion}
+We presented a hybrid cloud video analytics system with a predictive cost-aware scheduler. By dynamically adapting execution strategies, the system improves efficiency and scalability compared to static approaches. It also supports semantic analysis via LLM/VLM when classical CV is insufficient.
+
+\section{Future Work}
+\begin{itemize}
+\item Learning-based scheduling models
+\item Real-time streaming analytics
+\item Edge-cloud collaborative processing
+\end{itemize}
+
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{1}
+\bibitem{vispesar}
+K. Betir et al., "VISPESAR: Video Summarization by Prompt Engineering and Serverless Architecture," 2025.
+\bibitem{yolo}
+J. Redmon et al., "YOLO: Real-Time Object Detection," 2016.
+\end{thebibliography}
+
+\end{document}
