@@ -1,0 +1,24 @@
+# ── Secrets & config ──────────────────────────────────────────────────────────
+.env
+
+# ── Videos / large assets (not committed to git) ─────────────────────────────
+input_videos/
+
+# ── Kubernetes temp files ─────────────────────────────────────────────────────
+storage/k8s_input/
+storage/k8s_results/
+.mount_sentinel
+
+# ── Python ────────────────────────────────────────────────────────────────────
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ── ML model weights (downloaded at runtime) ─────────────────────────────────
+*.pt
+runs/

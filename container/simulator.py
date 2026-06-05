@@ -19,12 +19,12 @@ class ContainerPathSimulator:
         """
         Simulates the entire Docker / Container worker execution path.
         Downloads video once, processes entirely on local disk, uploads final summary.
-        Returns final S3 key of the summary video, and processing logs.
+        Returns final S3 key of the summary video, processing logs, and annotation data.
         """
         logs = []
         folder_id = str(uuid.uuid4())[:8]
         filename = os.path.basename(video_local_path)
-        
+
         def log(msg):
             print(f"[Container-Worker] {msg}")
             logs.append(msg)
@@ -36,12 +36,10 @@ class ContainerPathSimulator:
 
         # 2. Worker Job Dispatch & Retrieval
         log(f"Worker container dispatched. Downloading video {filename} from S3...")
-        # Local container workspace setup
         container_workspace = os.path.join(tempfile.gettempdir(), f"container_{folder_id}")
         os.makedirs(container_workspace, exist_ok=True)
-        
+
         local_vid_path = os.path.join(container_workspace, filename)
-        # Download once (1 GET request)
         self.storage.get_file(video_s3_key, local_vid_path)
         log("Video downloaded to local container workspace.")
 
@@ -49,11 +47,9 @@ class ContainerPathSimulator:
         log("Extracting frames locally to container disk...")
         cap = cv2.VideoCapture(local_vid_path)
         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
         sample_rate = int(fps)
         extracted_frames = []
-        
+
         frame_idx = 0
         while True:
             ret, frame = cap.read()
@@ -73,7 +69,7 @@ class ContainerPathSimulator:
         log("Running batch YOLO detection on local frames...")
         frame_paths = [f[0] for f in extracted_frames]
         detections = self.cv_analyzer.detect_objects(frame_paths, target_labels)
-        
+
         yolo_results = []
         for (path, ts), det_res in zip(extracted_frames, detections):
             yolo_results.append({
@@ -87,7 +83,7 @@ class ContainerPathSimulator:
         needs_vlm_pre = self.semantic_trigger.should_trigger_vlm_pre_execution(query)
         needs_vlm_fallback = False
         fallback_candidates = []
-        
+
         for res in yolo_results:
             if self.semantic_trigger.should_trigger_vlm_fallback(res["detections"], target_labels):
                 needs_vlm_fallback = True
@@ -103,15 +99,18 @@ class ContainerPathSimulator:
             else:
                 log(f"VLM Analysis triggered: YOLO confidence fallback. Escalate {len(fallback_candidates)} frame(s) to VLM.")
                 vlm_candidates = fallback_candidates
-                
+
             log(f"Running VLM analysis on {len(vlm_candidates)} frame(s) locally...")
             for candidate in vlm_candidates:
                 vlm_res = self.vlm_analyzer.analyze_frame(candidate["path"], query)
                 if vlm_res["match"]:
                     matched_frames.append({
-                        "path": candidate["path"],
-                        "timestamp": candidate["timestamp"],
-                        "confidence": vlm_res["confidence"]
+                        "path":       candidate["path"],
+                        "timestamp":  candidate["timestamp"],
+                        "confidence": vlm_res["confidence"],
+                        "match_type": "vlm",
+                        "detections": [{"label": "vlm", "confidence": vlm_res["confidence"],
+                                        "bbox": vlm_res.get("bbox")}],
                     })
             log(f"VLM analysis finished. Found {len(matched_frames)} match(es).")
         else:
@@ -120,33 +119,34 @@ class ContainerPathSimulator:
             for res in yolo_results:
                 has_target = False
                 max_conf = 0.0
+                best_dets = []
                 for det in res["detections"]:
                     if not target_labels_lower or det["label"].lower() in target_labels_lower:
                         if det["confidence"] >= self.semantic_trigger.confidence_threshold:
                             has_target = True
-                            max_conf = max(max_conf, det["confidence"])
+                            if det["confidence"] > max_conf:
+                                max_conf = det["confidence"]
+                            best_dets.append(det)
                 if has_target:
                     matched_frames.append({
-                        "path": res["path"],
-                        "timestamp": res["timestamp"],
-                        "confidence": max_conf
+                        "path":       res["path"],
+                        "timestamp":  res["timestamp"],
+                        "confidence": max_conf,
+                        "match_type": "yolo",
+                        "detections": best_dets,
                     })
             log(f"YOLO matching finished. Found {len(matched_frames)} match(es).")
 
-        # 6. Merge Intervals (Done locally)
+        # 6. Merge Intervals
         matched_frames.sort(key=lambda x: x["timestamp"])
         log("Merging highlight intervals...")
-        
+
         intervals = []
         if matched_frames:
-            raw_intervals = []
-            for mf in matched_frames:
-                t = mf["timestamp"]
-                raw_intervals.append((max(0.0, t - 2.0), t + 2.0))
-            
+            raw_intervals = [(max(0.0, mf["timestamp"] - 2.0), mf["timestamp"] + 2.0)
+                             for mf in matched_frames]
             raw_intervals.sort()
             current_start, current_end = raw_intervals[0]
-            
             for start, end in raw_intervals[1:]:
                 if start <= current_end:
                     current_end = max(current_end, end)
@@ -154,16 +154,15 @@ class ContainerPathSimulator:
                     intervals.append((current_start, current_end))
                     current_start, current_end = start, end
             intervals.append((current_start, current_end))
-            
+
         log(f"Merged intervals: {intervals}")
 
-        # If no intervals found, return empty
         if not intervals:
             log("No highlight intervals found. Exiting.")
             shutil.rmtree(container_workspace, ignore_errors=True)
-            return None, logs
+            return None, logs, {}
 
-        # 7. Clip Extraction (Directly from local video file - No S3 Writes)
+        # 7. Clip Extraction
         log("Cutting highlight clips on local disk...")
         local_clips = []
         for idx, (start, end) in enumerate(intervals):
@@ -171,8 +170,8 @@ class ContainerPathSimulator:
             os.makedirs(os.path.dirname(clip_path), exist_ok=True)
             VideoEditor.cut_clip(local_vid_path, clip_path, start, end)
             local_clips.append(clip_path)
-            
-        # 8. Summary Assembly (Concatenated locally)
+
+        # 8. Summary Assembly
         log("Assembling final summary video locally...")
         summary_local_path = os.path.join(container_workspace, f"summary_{folder_id}.mp4")
         VideoEditor.merge_clips(local_clips, summary_local_path)
@@ -185,5 +184,18 @@ class ContainerPathSimulator:
         # 10. Workspace Cleanup
         shutil.rmtree(container_workspace, ignore_errors=True)
         log(f"Container job finished. Output available at S3: {final_s3_key}")
-        
-        return final_s3_key, logs
+
+        # Build annotation data for the caller
+        frame_annotations = {
+            mf["timestamp"]: {
+                "match_type": mf.get("match_type", "yolo"),
+                "detections":  mf.get("detections", []),
+            }
+            for mf in matched_frames
+        }
+        annotation_data = {
+            "intervals":         intervals,
+            "frame_annotations": frame_annotations,
+        }
+
+        return final_s3_key, logs, annotation_data

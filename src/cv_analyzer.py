@@ -47,7 +47,8 @@ class CVAnalyzer:
                             if label in target_labels or not target_labels:
                                 frame_detections.append({
                                     "label": label,
-                                    "confidence": conf
+                                    "confidence": conf,
+                                    "bbox": box.xyxy[0].tolist()  # [x1, y1, x2, y2] pixel coords
                                 })
                                 
                     results.append({
@@ -70,14 +71,15 @@ class CVAnalyzer:
             fn_hash = sum(ord(c) for c in os.path.basename(path))
             
             for label in target_labels:
-                # Check if this frame should "contain" the object
-                # Let's say every 3rd or 4th frame detects something to simulate a sequence
                 if fn_hash % 5 in (1, 2):
-                    # Generate random confidence
                     conf = 0.5 + 0.45 * ((fn_hash % 10) / 10.0)
+                    # Mock bbox: deterministic position based on hash
+                    bx = int((fn_hash % 300) + 50)
+                    by = int((fn_hash % 200) + 50)
                     frame_detections.append({
                         "label": label,
-                        "confidence": conf
+                        "confidence": conf,
+                        "bbox": [bx, by, bx + 120, by + 80]
                     })
             
             results.append({

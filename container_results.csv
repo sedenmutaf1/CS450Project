@@ -1,0 +1,60 @@
+video,query,duration,motion_intensity,visual_entropy,scene_changes,system_load,cost,latency,matched
+13488560_2160_3840_19fps.mp4,find all frames where three motorcycles exist in frame,20.718,14.848,7.399,0,36.25,0.001619,140.333,True
+13488560_2160_3840_19fps.mp4,find all frames where a taxi is in frame,20.718,14.848,7.399,0,45.7,0.002254,195.522,True
+13488560_2160_3840_19fps.mp4,find all frames where a motorcycle is moving,20.718,14.848,7.399,0,40.3,0.002885,250.386,True
+15106661_2560_1440_30fps.mp4,find all frames where the advertisement panel is clearly seen,14.882,27.025,7.733,0,60.25,0.00156,135.205,True
+15106661_2560_1440_30fps.mp4,find all frames where a person is walking,14.882,27.025,7.733,0,41.05,0.001676,145.273,True
+15106661_2560_1440_30fps.mp4,find all frames where a car is moving,14.882,27.025,7.733,0,40.35,0.001389,120.297,True
+14492440_2160_3840_29fps.mp4,find all frames where there are flowers,12.95,19.824,7.686,0,47.4,0.000352,30.163,False
+14492440_2160_3840_29fps.mp4,find all frames where there is a human,12.95,19.824,7.686,0,46.75,0.000467,40.131,False
+14492440_2160_3840_29fps.mp4,find are frames where there is a hand moving,12.95,19.824,7.686,0,45.75,0.001043,90.202,False
+14671265_3840_2160_24fps.mp4,find the frames where the butterfly is flying off the flower,19.061,9.396,7.04,0,46.0,0.000697,60.173,True
+14671265_3840_2160_24fps.mp4,find the frames where the butterfly is on the flower,19.061,9.396,7.04,0,49.55,0.000697,60.175,True
+4821002-hd_1080_1920_25fps.mp4,find all frames where a man is smiling,10.52,5.234,6.416,0,54.6,0.000237,20.136,True
+4821002-hd_1080_1920_25fps.mp4,fin all frames where a woman is smiling,10.52,5.234,6.416,0,48.4,0.000236,20.092,True
+4821002-hd_1080_1920_25fps.mp4,find all frames where a woman is not smiling,10.52,5.234,6.416,0,90.05,0.000236,20.092,True
+9278564-hd_1920_1080_30fps.mp4,find all frames where a bird is flying,21.033,3.862,5.68,0,41.45,0.00041,35.151,True
+9278564-hd_1920_1080_30fps.mp4,find all frames where there is a parachute,21.033,3.862,5.68,0,41.5,0.000468,40.23,False
+9278564-hd_1920_1080_30fps.mp4,find all frames where there is a airplane,21.033,3.862,5.68,0,40.4,0.000409,35.111,False
+Do you like the sound of a swish_ #asmr #swish #basketball #viral #shorts #asmrbasketball #fyp.mp4,find all frames where person is jumping,6.395,1.04,7.599,1,48.05,0.000351,30.086,True
+Do you like the sound of a swish_ #asmr #swish #basketball #viral #shorts #asmrbasketball #fyp.mp4,find all frames where a basketball is going inside the hoop,6.395,1.04,7.599,1,39.2,0.000409,35.102,True
+How to dice an onion.mp4,find all frames where there is a woman in frame,55.12,27.366,7.383,8,43.5,0.00139,120.358,True
+How to dice an onion.mp4,find all frames where there is a knife in frame,55.12,27.366,7.383,8,39.05,0.000699,60.276,True
+How to dice an onion.mp4,find all frames where there are hands in frame,55.12,27.366,7.383,8,40.7,0.001217,105.378,True
+How to dice an onion.mp4,find all frames where there is an onion in frame,55.12,27.366,7.383,8,89.05,0.001331,115.278,True
+The All New KFC 5-in-1 Meal Box.mp4,find all frames where there is a person in frame,30.12,20.721,7.015,8,47.95,0.001159,100.301,True
+The All New KFC 5-in-1 Meal Box.mp4,find all frames where there is a hand moving,30.12,20.721,7.015,8,39.75,0.00162,140.363,True
+The All New KFC 5-in-1 Meal Box.mp4,find all frames where there is a watch in frame,30.12,20.721,7.015,8,43.6,0.001158,100.233,True
+VIRAT_S_000201_02_000590_000623.mp4,find all frames where there is a red car in frame,32.7,2.12,7.201,0,40.1,0.002428,210.644,True
+VIRAT_S_000201_02_000590_000623.mp4,find all frames where there is a car moving in frame,32.7,2.12,7.201,0,38.8,0.00329,285.626,True
+VIRAT_S_000201_02_000590_000623.mp4,find all frames where there is a person walking in frame,32.7,2.12,7.201,0,44.45,0.00335,290.804,True
+VIRAT_S_010205_01_000207_000288.mp4,find all frames where there is a person walking in frame,79.433,1.615,7.261,0,41.75,0.006633,576.287,True
+VIRAT_S_010205_01_000207_000288.mp4,find all frames where there is a person close to pole in the middle,79.433,1.615,7.261,0,42.0,0.003809,330.726,True
+VIRAT_S_010205_01_000207_000288.mp4,find all frames where there is a bicycle rider,79.433,1.615,7.261,0,44.9,0.001736,150.447,True
+YTDown_YouTube_Little-girl-nearly-hit-by-car-in-Califor_Media_OXO01PKSuVA_001_720p.mp4,find all frames where there is a person walking,12.679,10.781,6.989,2,37.3,0.00087,75.191,True
+YTDown_YouTube_Little-girl-nearly-hit-by-car-in-Califor_Media_OXO01PKSuVA_001_720p.mp4,find all frames where a car is too close to a person,12.679,10.781,6.989,2,43.35,0.0011,95.176,True
+YTDown_YouTube_Little-girl-nearly-hit-by-car-in-Califor_Media_OXO01PKSuVA_001_720p.mp4,find all frames where there is a person running,12.679,10.781,6.989,2,44.05,0.000698,60.201,True
+dogchild.mp4,find all frames where there is a dog in frame,194.3,45.573,7.627,1,59.6,0.000468,40.191,False
+dogchild.mp4,find all frames where there is a black dog in frame,194.3,45.573,7.627,1,65.65,0.000467,40.169,False
+dogchild.mp4,find all frames where both a dog and a baby is in frame,194.3,45.573,7.627,1,43.7,0.000427,36.674,False
+videoplayback.mp4,find all frames where there is a red pepper in frame,79.36,44.851,6.977,9,47.25,0.001965,170.374,True
+videoplayback.mp4,find all frames where there is a man,79.36,44.851,6.977,9,42.8,0.000988,85.42,True
+videoplayback.mp4,find all frames where there is a knife moving,79.36,44.851,6.977,9,48.3,0.003348,290.632,True
+videoplayback.mp4,find all frames there are fingers in frame,79.36,44.851,6.977,9,38.1,0.001217,105.324,True
+vidssave.com Extraction _ One-Shot Gun Fight Scene 720p.mp4,find all frames where there is a gun in frame,123.083,24.99,5.507,7,36.55,0.004328,375.863,True
+vidssave.com Extraction _ One-Shot Gun Fight Scene 720p.mp4,find all frame where there are two people in frame,123.083,24.99,5.507,7,46.75,0.00306,265.612,True
+vidssave.com Extraction _ One-Shot Gun Fight Scene 720p.mp4,find all frames where there is a boy moving in frame,123.083,24.99,5.507,7,49.95,0.0064,556.041,True
+vidssave.com FASTEST AMBULANCE EVER! 1080P.mp4,find all frames where there is an ambulance in frame,27.027,1.823,7.064,0,39.85,0.000121,10.055,False
+vidssave.com FASTEST AMBULANCE EVER! 1080P.mp4,find all frames where there is a bicycle in frame,27.027,1.823,7.064,0,36.75,0.000122,10.116,False
+vidssave.com FASTEST AMBULANCE EVER! 1080P.mp4,find all frames where there is a moving black car in frame,27.027,1.823,7.064,0,41.85,0.000122,10.177,False
+vidssave.com FREE STOCK FOOTAGE- Traffic on the streets 1080P.mp4,find all frames where there is a person in frame,13.647,31.298,7.416,0,38.0,0.000985,85.195,True
+vidssave.com FREE STOCK FOOTAGE- Traffic on the streets 1080P.mp4,find all frames where there is a male with a red tshirt,13.647,31.298,7.416,0,44.35,0.000928,80.198,True
+vidssave.com FREE STOCK FOOTAGE- Traffic on the streets 1080P.mp4,find all frames where there is a white car,13.647,31.298,7.416,0,37.1,0.000467,40.165,True
+vidssave.com How To Dice an Onyo (Onion) 720P.mp4,find all frames where there is a knife,57.8,31.178,7.602,4,43.55,0.000755,65.176,True
+vidssave.com How To Dice an Onyo (Onion) 720P.mp4,find all frames where there is onion in the frame,57.8,31.178,7.602,4,38.15,0.001792,155.389,True
+vidssave.com How To Dice an Onyo (Onion) 720P.mp4,find all frames where there is a man in frame,57.8,31.178,7.602,4,38.9,0.002253,195.409,True
+vidssave.com Rain Sounds   15 seconds soundtrack 480p.mp4,find all frames where there is a cat,15.048,2.644,7.123,1,40.25,0.00018,15.156,False
+vidssave.com Rain Sounds   15 seconds soundtrack 480p.mp4,find all frames where there is water in frame,15.048,2.644,7.123,1,41.95,0.000238,20.197,True
+vidssave.com Rain Sounds   15 seconds soundtrack 480p.mp4,find all frames where there is a tree in frame,15.048,2.644,7.123,1,37.85,0.000237,20.169,True
+vidssave.com When My City's Traffic Lights Turn Off __ ViralHog 720P.mp4,find all frames where two cars are too close to each other,11.887,4.046,7.378,0,44.5,0.00064,55.175,True
+vidssave.com When My City's Traffic Lights Turn Off __ ViralHog 720P.mp4,find all frames where there is a red car moving,11.887,4.046,7.378,0,42.65,0.00064,55.184,True

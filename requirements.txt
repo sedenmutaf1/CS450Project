@@ -1,2 +1,4 @@
 ultralytics
-google-generativeai
+google-genai
+ollama
+python-dotenv

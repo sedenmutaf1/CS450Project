@@ -156,7 +156,8 @@ class ServerlessPathSimulator:
                     "key": key,
                     "timestamp": ts,
                     "match": vlm_res["match"],
-                    "confidence": vlm_res["confidence"]
+                    "confidence": vlm_res["confidence"],
+                    "bbox": vlm_res.get("bbox"),
                 }
                 
             with ThreadPoolExecutor() as executor:
@@ -164,7 +165,14 @@ class ServerlessPathSimulator:
                 
             for v_res in vlm_results:
                 if v_res["match"]:
-                    matched_frames.append(v_res)
+                    matched_frames.append({
+                        "key": v_res["key"],
+                        "timestamp": v_res["timestamp"],
+                        "confidence": v_res["confidence"],
+                        "match_type": "vlm",
+                        "detections": [{"label": "vlm", "confidence": v_res["confidence"],
+                                        "bbox": v_res.get("bbox")}],
+                    })
                     
             log(f"VLM Lambdas completed. Found {len(matched_frames)} match(es).")
         else:
@@ -174,16 +182,21 @@ class ServerlessPathSimulator:
             for res in yolo_results:
                 has_target = False
                 max_conf = 0.0
+                best_dets = []
                 for det in res["detections"]:
                     if not target_labels_lower or det["label"].lower() in target_labels_lower:
                         if det["confidence"] >= self.semantic_trigger.confidence_threshold:
                             has_target = True
-                            max_conf = max(max_conf, det["confidence"])
+                            if det["confidence"] > max_conf:
+                                max_conf = det["confidence"]
+                            best_dets.append(det)
                 if has_target:
                     matched_frames.append({
                         "key": res["key"],
                         "timestamp": res["timestamp"],
-                        "confidence": max_conf
+                        "confidence": max_conf,
+                        "match_type": "yolo",
+                        "detections": best_dets,
                     })
             log(f"YOLO matching finished. Found {len(matched_frames)} match(es).")
 
@@ -280,5 +293,18 @@ class ServerlessPathSimulator:
         self.storage.delete_folder(f"clips/{folder_id}")
         
         log(f"Summary Assembly completed. Output available at S3: {final_s3_key}")
-        
-        return final_s3_key, logs
+
+        # Build annotation data for the caller to produce an annotated video
+        frame_annotations = {
+            mf["timestamp"]: {
+                "match_type": mf.get("match_type", "yolo"),
+                "detections":  mf.get("detections", []),
+            }
+            for mf in matched_frames
+        }
+        annotation_data = {
+            "intervals":          intervals,
+            "frame_annotations":  frame_annotations,
+        }
+
+        return final_s3_key, logs, annotation_data

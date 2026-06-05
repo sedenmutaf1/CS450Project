@@ -5,6 +5,14 @@ import numpy as np
 import time
 import argparse
 
+# Load environment variables from .env file (if present)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+
 from src.storage import StorageSimulator
 from src.features import FeatureExtractor
 from src.scheduler import PredictiveScheduler
@@ -12,7 +20,10 @@ from src.cv_analyzer import CVAnalyzer
 from src.vlm_analyzer import VLMAnalyzer
 from src.semantic_trigger import SemanticTrigger
 from src.serverless_path import ServerlessPathSimulator
-from src.container_path import ContainerPathSimulator
+from src.llm_query_analyzer import LLMQueryAnalyzer
+from container.simulator import ContainerPathSimulator
+from container.k8s import ContainerPathK8s
+from src.video_editor import VideoEditor
 
 def generate_synthetic_video(output_path, duration_sec=15, fps=25):
     """
@@ -79,10 +90,17 @@ def generate_synthetic_video(output_path, duration_sec=15, fps=25):
     print(f"[Generator] Synthetic video generated at {output_path} ({duration_sec}s, {fps}fps)")
     return True
 
-def run_evaluation(video_path, query, target_labels):
+def run_evaluation(video_path, query, target_labels, will_trigger_vlm_override=None, use_k8s=False):
+    import uuid
+    run_id = str(uuid.uuid4())[:8]
+    output_dir = os.path.join("storage", "outputs", run_id)
+    os.makedirs(output_dir, exist_ok=True)
+
     print("="*60)
     print("STARTING HYBRID VIDEO ANALYTICS EVALUATION")
     print("="*60)
+    print(f"Run ID:           {run_id}")
+    print(f"Output directory: {os.path.abspath(output_dir)}")
     print(f"Video file: {video_path}")
     print(f"Query: {query}")
     print(f"Targets: {target_labels}")
@@ -104,7 +122,10 @@ def run_evaluation(video_path, query, target_labels):
     print(f"System Load L:    {features['system_load']:.2f}")
     
     # 3. Check VLM trigger ahead of scheduling
-    will_trigger_vlm = semantic_trigger.should_trigger_vlm_pre_execution(query)
+    if will_trigger_vlm_override is not None:
+        will_trigger_vlm = will_trigger_vlm_override
+    else:
+        will_trigger_vlm = semantic_trigger.should_trigger_vlm_pre_execution(query)
     
     # 4. Compare across lambdas (different values of lambda_weight)
     lambdas = [0.001, 0.05, 1.0, 10.0]
@@ -129,21 +150,26 @@ def run_evaluation(video_path, query, target_labels):
         print(f"{l_val:<15.4f} | {s_obj:<22.6f} | {c_obj:<22.6f} | {dec}")
         
     # 5. Run Execution Baselines
-    # Create simulator paths
     serverless_sim = ServerlessPathSimulator(storage, cv_analyzer, vlm_analyzer, semantic_trigger)
-    container_sim = ContainerPathSimulator(storage, cv_analyzer, vlm_analyzer, semantic_trigger)
+    if use_k8s:
+        print("[main] Using real Kubernetes container path (ContainerPathK8s).")
+        container_sim = ContainerPathK8s(storage)
+    else:
+        container_sim = ContainerPathSimulator(storage, cv_analyzer, vlm_analyzer, semantic_trigger)
     
     print("\n--- Execution Baseline 1: SERVERLESS (Forced) ---")
     storage.reset_metrics()
     s_start = time.time()
-    s_output, s_logs = serverless_sim.run(video_path, query, target_labels)
+    s_result = serverless_sim.run(video_path, query, target_labels)
+    s_output, s_logs, s_ann = s_result if len(s_result) == 3 else (*s_result, {})
     s_actual_latency = time.time() - s_start
     s_metrics = storage.get_metrics()
-    
+
     print("\n--- Execution Baseline 2: CONTAINER (Forced) ---")
     storage.reset_metrics()
     c_start = time.time()
-    c_output, c_logs = container_sim.run(video_path, query, target_labels)
+    c_result = container_sim.run(video_path, query, target_labels)
+    c_output, c_logs, c_ann = c_result if len(c_result) == 3 else (*c_result, {})
     c_actual_latency = time.time() - c_start
     c_metrics = storage.get_metrics()
     
@@ -160,7 +186,7 @@ def run_evaluation(video_path, query, target_labels):
     print(f"{'Simulated cost (USD)':<25} | ${s_metrics['total_cost_usd']:<14.6f} | ${c_metrics['total_cost_usd']:<14.6f}")
     
     # Save a comparison summary file in storage
-    report_path = "storage/outputs/evaluation_report.md"
+    report_path = os.path.join(output_dir, "evaluation_report.md")
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("# Video Analytics Performance Evaluation Report\n\n")
         f.write("## Workload Information\n")
@@ -190,6 +216,68 @@ def run_evaluation(video_path, query, target_labels):
             f.write(f"| {l_val} | {res['metrics']['serverless']['objective']:.6f} | {res['metrics']['container']['objective']:.6f} | **{res['decision'].upper()}** |\n")
             
     print(f"\n[Evaluation] Evaluation report generated at {os.path.abspath(report_path)}")
+
+    # 6. Create annotated highlight videos
+    print("\n--- Generating Annotated Highlight Videos ---")
+    abs_video = os.path.abspath(video_path)
+    for tag, ann in [("serverless", s_ann), ("container", c_ann)]:
+        if ann and ann.get("intervals") and ann.get("frame_annotations"):
+            ann_path = os.path.join(output_dir, f"{tag}_annotated.mp4")
+            VideoEditor.create_annotated_highlight_video(
+                abs_video,
+                ann["intervals"],
+                ann["frame_annotations"],
+                ann_path,
+                query,
+            )
+        else:
+            print(f"[Evaluation] No matches for {tag} path — skipping annotated video.")
+
+    # 7. Log results to separate CSVs per path
+    try:
+        import csv
+
+        shared_fields = ["run_id", "video", "query",
+                         "duration", "motion_intensity", "visual_entropy",
+                         "scene_changes", "system_load"]
+        shared_values = {
+            "run_id":           run_id,
+            "video":            os.path.basename(video_path),
+            "query":            query,
+            "duration":         round(features["duration"], 3),
+            "motion_intensity": round(features["motion_intensity"], 3),
+            "visual_entropy":   round(features["visual_entropy"], 3),
+            "scene_changes":    features["scene_changes"],
+            "system_load":      round(features["system_load"], 3),
+        }
+
+        def append_csv(csv_path, row):
+            fieldnames = list(row.keys())
+            write_header = not os.path.exists(csv_path)
+            with open(csv_path, "a", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                if write_header:
+                    writer.writeheader()
+                writer.writerow(row)
+
+        # Serverless results
+        s_row = {**shared_values,
+                 "cost":    round(s_metrics["total_cost_usd"], 6),
+                 "latency": round(s_actual_latency, 3)}
+        append_csv("serverless_results.csv", s_row)
+        print(f"[DataLogger] Serverless row → serverless_results.csv")
+
+        # Container results
+        c_row = {**shared_values,
+                 "cost":    round(c_metrics["total_cost_usd"], 6),
+                 "latency": round(c_actual_latency, 3)}
+        append_csv("container_results.csv", c_row)
+        print(f"[DataLogger] Container row  → container_results.csv")
+
+
+    except Exception as e:
+        print(f"[DataLogger WARNING] Could not write training_data.csv: {e}")
+
     
     # 6. Generate Plot if Matplotlib is installed
     try:
@@ -213,7 +301,7 @@ def run_evaluation(video_path, query, target_labels):
         ax.grid(True, linestyle='--', alpha=0.6)
         ax.legend()
         
-        plot_path = "storage/outputs/cost_latency_tradeoff.png"
+        plot_path = os.path.join(output_dir, "cost_latency_tradeoff.png")
         plt.savefig(plot_path)
         plt.close()
         print(f"[Evaluation] Plot saved at {os.path.abspath(plot_path)}")
@@ -224,16 +312,36 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Hybrid Video Analytics Simulation Runner")
     parser.add_argument("--video", type=str, default="storage/videos/test_traffic.mp4", help="Path to input video")
     parser.add_argument("--query", type=str, default="find all frames with a red car moving on the road", help="Semantic analytics query")
-    parser.add_argument("--targets", type=str, default="car,person", help="Comma-separated YOLO target objects")
-    parser.add_argument("--duration", type=int, default=15, help="Duration of generated synthetic video (seconds)")
-    
+    parser.add_argument("--targets", type=str, default=None, help="(Optional) Comma-separated YOLO target objects. If omitted, inferred from query by LLM.")
+    parser.add_argument("--model",    type=str, default="llama3.2:1b", help="Ollama model for query analysis")
+    parser.add_argument("--duration", type=int, default=15, help="Synthetic video duration (seconds)")
+    parser.add_argument("--k8s",      action="store_true",
+                        help="Use real Kubernetes (Minikube) for container path instead of simulator")
+
     args = parser.parse_args()
-    
+
     # If the video path doesn't exist and matches default, generate a synthetic one
     if not os.path.exists(args.video) and args.video == "storage/videos/test_traffic.mp4":
         print(f"Default video {args.video} not found. Generating synthetic video...")
         generate_synthetic_video(args.video, duration_sec=args.duration)
-        
-    target_labels = [t.strip() for t in args.targets.split(",")]
-    
-    run_evaluation(args.video, args.query, target_labels)
+
+    # --- Query Analysis: LLM or manual override ---
+    will_trigger_vlm_override = None
+    if args.targets is not None:
+        # User explicitly provided targets — skip LLM, use keyword check for VLM flag
+        target_labels = [t.strip() for t in args.targets.split(",")]
+        print(f"\n[QueryAnalysis] Using user-provided targets: {target_labels}")
+    else:
+        # Let the LLM analyze the query
+        print("\n--- Query Analysis (LLM) ---")
+        analyzer = LLMQueryAnalyzer(model=args.model)
+        analysis = analyzer.analyze(args.query)
+        target_labels = analysis["target_labels"]
+        will_trigger_vlm_override = analysis["needs_vlm"]
+        print(f"  Source:        {analysis['source']}")
+        print(f"  Target labels: {target_labels}")
+        print(f"  Needs VLM:     {will_trigger_vlm_override}")
+        print(f"  Reasoning:     {analysis['reasoning']}")
+
+    run_evaluation(args.video, args.query, target_labels, will_trigger_vlm_override, use_k8s=args.k8s)
+
